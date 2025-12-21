@@ -20,3 +20,7 @@ fi
 mkdir -p "$TARGET_DIR"
 cp -r "$SRC_DIR"/* "$TARGET_DIR"/
 rm -rf "$TMP_DIR" "$ZIP_PATH"
+
+echo
+echo -e "\033[1;32mInstallation complete\033[0m"
+echo
