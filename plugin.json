@@ -5,7 +5,7 @@
     "version": "1.0.2",
     "description": "Show the amount of connected players to the server",
     "category": "plugin",
-    "url": "https://github.com/pelican-dev/plugins/tree/main/player-counter",
+    "url": "https://github.com/Finxnz/PlayercounterPelicanPlugin",
     "update_url": null,
     "namespace": "Finxnz\\PlayerCounter",
     "class": "PlayerCounterPlugin",
