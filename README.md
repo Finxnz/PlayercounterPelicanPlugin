@@ -4,7 +4,7 @@ This plugin adds a **player overview section** to your server by using the query
 
 ##  Requirements
 
-* Pterodactyl Panel (Pelican)
+* A Pelican Panel with the version beta30 or newer
 * A Minecraft **Paper** server
 * Query support enabled
 * Access to the panel server (SSH / SFTP)
