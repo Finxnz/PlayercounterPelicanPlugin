@@ -33,8 +33,8 @@ This plugin adds a **player overview section** to your server by using the query
 2. Navigate to **Queries**.
 3. Create a new query with the following settings:
 
-   * **Offset:** `0`
-   * **Egg:** `Paper`
+   * **Offset:** `0` means leave blank
+   * **Egg:** `Paper` or `Purpur` or `leaf` this plugin has been tested with paper and works.
 
 ### 2. Server Settings
 
