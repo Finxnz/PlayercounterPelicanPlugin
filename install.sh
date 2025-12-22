@@ -7,7 +7,6 @@ echo
 
 read -r -p "Enter your panel directory (default: /var/www/pelican): " PANEL_DIR
 PANEL_DIR=${PANEL_DIR:-/var/www/pelican}
-
 PLUGINS_DIR="$PANEL_DIR/plugins"
 TARGET_DIR="$PLUGINS_DIR/player-counter"
 ZIP_URL="https://github.com/Finxnz/PlayercounterPelicanPlugin/raw/refs/heads/master/player-counter.zip"
@@ -19,6 +18,7 @@ echo
 echo "  1) Install"
 echo "  2) Update"
 echo
+
 read -r -p "Select an option [1-2]: " ACTION
 
 if [ "$ACTION" = "2" ]; then
@@ -42,8 +42,8 @@ elif [ "$ACTION" != "1" ]; then
 fi
 
 TMP_DIR=$(mktemp -d)
-
 mkdir -p "$PLUGINS_DIR"
+
 curl -fsSL -o "$ZIP_PATH" "$ZIP_URL"
 unzip -q "$ZIP_PATH" -d "$TMP_DIR"
 
@@ -56,7 +56,28 @@ fi
 
 mkdir -p "$TARGET_DIR"
 cp -r "$SRC_DIR"/* "$TARGET_DIR"/
+
 rm -rf "$TMP_DIR" "$ZIP_PATH"
+
+# Determine webserver user
+WEBSERVER_USER="www-data"
+if command -v nginx >/dev/null 2>&1; then
+  WEBSERVER_USER=$(ps aux | grep -E 'nginx: worker' | grep -v root | head -1 | awk '{print $1}')
+elif command -v apache2 >/dev/null 2>&1; then
+  WEBSERVER_USER=$(ps aux | grep -E 'apache2|httpd' | grep -v root | head -1 | awk '{print $1}')
+fi
+
+# Set correct permissions
+echo
+echo -e "\033[1;33mSetting permissions...\033[0m"
+chown -R "$WEBSERVER_USER":"$WEBSERVER_USER" "$PLUGINS_DIR"
+chmod -R 755 "$PLUGINS_DIR"
+
+# Install plugin via artisan
+echo
+echo -e "\033[1;33mInstalling plugin...\033[0m"
+cd "$PANEL_DIR"
+php artisan p:plugin:install player-counter
 
 echo
 echo -e "\033[1;32m========================================\033[0m"
