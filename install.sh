@@ -59,7 +59,7 @@ cp -r "$SRC_DIR"/* "$TARGET_DIR"/
 
 rm -rf "$TMP_DIR" "$ZIP_PATH"
 
-# Determine webserver user
+
 WEBSERVER_USER="www-data"
 if command -v nginx >/dev/null 2>&1; then
   WEBSERVER_USER=$(ps aux | grep -E 'nginx: worker' | grep -v root | head -1 | awk '{print $1}')
@@ -67,19 +67,22 @@ elif command -v apache2 >/dev/null 2>&1; then
   WEBSERVER_USER=$(ps aux | grep -E 'apache2|httpd' | grep -v root | head -1 | awk '{print $1}')
 fi
 
-# Set correct permissions
+
 echo
 echo -e "\033[1;33mSetting permissions...\033[0m"
 chown -R "$WEBSERVER_USER":"$WEBSERVER_USER" "$PLUGINS_DIR"
 chmod -R 755 "$PLUGINS_DIR"
 
-# Install plugin via artisan only for new installations
+
+echo
 if [ "$ACTION" = "1" ]; then
-  echo
   echo -e "\033[1;33mInstalling plugin...\033[0m"
-  cd "$PANEL_DIR"
-  php artisan p:plugin:install player-counter
+else
+  echo -e "\033[1;33mUpdating plugin...\033[0m"
 fi
+
+cd "$PANEL_DIR"
+php artisan p:plugin:install player-counter
 
 echo
 echo -e "\033[1;32m========================================\033[0m"
