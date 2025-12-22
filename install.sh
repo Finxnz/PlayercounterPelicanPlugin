@@ -23,8 +23,6 @@ PLUGINS_DIR="$PANEL_DIR/plugins"
 TARGET_DIR="$PLUGINS_DIR/player-counter"
 ZIP_URL="https://github.com/Finxnz/PlayercounterPelicanPlugin/releases/latest/download/player-counter.zip"
 
-
-
 TMP_DIR="$(mktemp -d)"
 ZIP_PATH="$(mktemp)"
 
@@ -73,7 +71,12 @@ mkdir -p "$PLUGINS_DIR"
 
 echo
 echo "Downloading latest release..."
-curl -fL "$ZIP_URL" -o "$ZIP_PATH"
+curl -fL \
+  --retry 3 \
+  --retry-delay 2 \
+  -H "Accept: application/octet-stream" \
+  "$ZIP_URL" \
+  -o "$ZIP_PATH"
 
 echo "Extracting..."
 unzip -q "$ZIP_PATH" -d "$TMP_DIR"
@@ -97,4 +100,3 @@ echo
 echo "========================================"
 echo "        Installation complete            "
 echo "========================================"
-echo
