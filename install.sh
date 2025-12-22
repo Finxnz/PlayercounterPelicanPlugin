@@ -1,3 +1,4 @@
+@@ -1,13 +1,50 @@
 clear
 echo
 echo -e "\033[1;36m========================================\033[0m"
@@ -7,6 +8,7 @@ echo
 
 read -r -p "Enter your panel directory (default: /var/www/pelican): " PANEL_DIR
 PANEL_DIR=${PANEL_DIR:-/var/www/pelican}
+
 PLUGINS_DIR="$PANEL_DIR/plugins"
 TARGET_DIR="$PLUGINS_DIR/player-counter"
 ZIP_URL="https://github.com/Finxnz/PlayercounterPelicanPlugin/raw/refs/heads/master/player-counter.zip"
@@ -18,7 +20,6 @@ echo
 echo "  1) Install"
 echo "  2) Update"
 echo
-
 read -r -p "Select an option [1-2]: " ACTION
 
 if [ "$ACTION" = "2" ]; then
@@ -42,49 +43,18 @@ elif [ "$ACTION" != "1" ]; then
 fi
 
 TMP_DIR=$(mktemp -d)
-mkdir -p "$PLUGINS_DIR"
 
+mkdir -p "$PLUGINS_DIR"
+curl -L -o "$ZIP_PATH" "$ZIP_URL"
 curl -fsSL -o "$ZIP_PATH" "$ZIP_URL"
 unzip -q "$ZIP_PATH" -d "$TMP_DIR"
 
 INNER_COUNT=$(find "$TMP_DIR" -mindepth 1 -maxdepth 1 | wc -l)
-if [ "$INNER_COUNT" -eq 1 ] && [ -d "$(find "$TMP_DIR" -mindepth 1 -maxdepth 1)" ]; then
-  SRC_DIR="$(find "$TMP_DIR" -mindepth 1 -maxdepth 1)"
-else
-  SRC_DIR="$TMP_DIR"
-fi
-
-mkdir -p "$TARGET_DIR"
-cp -r "$SRC_DIR"/* "$TARGET_DIR"/
-
+@@ -22,5 +59,7 @@ cp -r "$SRC_DIR"/* "$TARGET_DIR"/
 rm -rf "$TMP_DIR" "$ZIP_PATH"
 
-
-WEBSERVER_USER="www-data"
-if command -v nginx >/dev/null 2>&1; then
-  WEBSERVER_USER=$(ps aux | grep -E 'nginx: worker' | grep -v root | head -1 | awk '{print $1}')
-elif command -v apache2 >/dev/null 2>&1; then
-  WEBSERVER_USER=$(ps aux | grep -E 'apache2|httpd' | grep -v root | head -1 | awk '{print $1}')
-fi
-
-
 echo
-echo -e "\033[1;33mSetting permissions...\033[0m"
-chown -R "$WEBSERVER_USER":"$WEBSERVER_USER" "$PLUGINS_DIR"
-chmod -R 755 "$PLUGINS_DIR"
-
-
-echo
-if [ "$ACTION" = "1" ]; then
-  echo -e "\033[1;33mInstalling plugin...\033[0m"
-else
-  echo -e "\033[1;33mUpdating plugin...\033[0m"
-fi
-
-cd "$PANEL_DIR"
-php artisan p:plugin:install player-counter
-
-echo
+echo -e "\033[1;32mInstallation complete\033[0m"
 echo -e "\033[1;32m========================================\033[0m"
 echo -e "\033[1;32m        Installation complete\033[0m"
 echo -e "\033[1;32m========================================\033[0m"
