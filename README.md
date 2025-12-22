@@ -11,6 +11,17 @@ This plugin adds a **player overview section** to your server by using the query
 
 ---
 
+##  Quick Installation and Update
+
+1. Run the **command**.
+2. And choose your option update/install.
+
+   ```bash
+   bash <(curl -fsSL https://raw.githubusercontent.com/Finxnz/PlayercounterPelicanPlugin/refs/heads/master/install.sh)
+   ```
+
+---
+
 ##  Installation
 
 1. Upload the plugin **ZIP file** to the **Plugin Section**.
