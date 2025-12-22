@@ -5,22 +5,23 @@ This plugin adds a **player overview section** to your server by using the query
 ##  Requirements
 
 * A Pelican Panel with the version beta30 or newer
-* A Minecraft **Paper** server
+* A Minecraft **Paper** / **Purpur** / **Leaf** server
 * Query support enabled
-* Access to the panel server (SSH / SFTP)
+* Access to the panel server via SSH
 
 ---
 
 ##  Quick Installation and Update
 
 1. Run the **command**.
-2. And choose your option update/install.
-3. If you updated the plugin run the script again and choose install. :D
+2. And choose your option update/install/permission fix.
+3. Use the permission fix if the skript failes due to permission errors.
+4. If you updated the plugin run the script again and choose install. :D
 
    ```bash
    bash <(curl -fsSL https://raw.githubusercontent.com/Finxnz/PlayercounterPelicanPlugin/refs/heads/master/install.sh)
    ```
-4. If this succesfully worked skip the next steps. **Dont forget to migrate!**
+5. If this succesfully worked skip the next step.
    
 ---
 
