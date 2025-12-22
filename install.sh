@@ -73,11 +73,13 @@ echo -e "\033[1;33mSetting permissions...\033[0m"
 chown -R "$WEBSERVER_USER":"$WEBSERVER_USER" "$PLUGINS_DIR"
 chmod -R 755 "$PLUGINS_DIR"
 
-# Install plugin via artisan
-echo
-echo -e "\033[1;33mInstalling plugin...\033[0m"
-cd "$PANEL_DIR"
-php artisan p:plugin:install player-counter
+# Install plugin via artisan only for new installations
+if [ "$ACTION" = "1" ]; then
+  echo
+  echo -e "\033[1;33mInstalling plugin...\033[0m"
+  cd "$PANEL_DIR"
+  php artisan p:plugin:install player-counter
+fi
 
 echo
 echo -e "\033[1;32m========================================\033[0m"
