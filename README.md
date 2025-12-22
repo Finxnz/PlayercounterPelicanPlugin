@@ -46,6 +46,7 @@ This plugin adds a **player overview section** to your server by using the query
 2. Navigate to **Queries**.
 3. Create a new query with the following settings:
 
+   * **Type:** `game type` currentyl supports minecraft only
    * **Offset:** `0` means leave blank
    * **Server:** Choose the server you want a player counter for (currently only supports minecraft)
 
