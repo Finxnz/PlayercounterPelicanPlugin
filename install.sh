@@ -21,7 +21,8 @@ PANEL_DIR=${PANEL_DIR:-/var/www/pelican}
 
 PLUGINS_DIR="$PANEL_DIR/plugins"
 TARGET_DIR="$PLUGINS_DIR/player-counter"
-ZIP_URL="https://github.com/Finxnz/PlayercounterPelicanPlugin/releases/latest/download/player-counter.zip"
+ZIP_URL="https://raw.githubusercontent.com/Finxnz/PlayercounterPelicanPlugin/master/player-counter.zip
+
 
 TMP_DIR="$(mktemp -d)"
 ZIP_PATH="$(mktemp)"
