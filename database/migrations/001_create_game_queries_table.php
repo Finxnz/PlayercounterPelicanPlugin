@@ -8,6 +8,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (Schema::hasTable('game_queries')) {
+            return;
+        }
+
         Schema::create('game_queries', function (Blueprint $table) {
             $table->increments('id');
             $table->string('query_type');

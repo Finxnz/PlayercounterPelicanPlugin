@@ -2,7 +2,7 @@
     "id": "player-counter",
     "name": "Player Counter",
     "author": "Finxnz",
-    "version": "1.0.2",
+    "version": "1.0.8",
     "description": "Show the amount of connected players to the server",
     "category": "plugin",
     "url": "https://github.com/pelican-dev/plugins/tree/main/player-counter",
@@ -14,9 +14,7 @@
         "server"
     ],
     "panel_version": null,
-    "composer_packages": {
-        "krymosoftware/gameq": "^4.0"
-    },
+    "composer_packages": {},
     "permissions": [
         "admin.player-counter.*"
     ]

@@ -9,6 +9,8 @@ use Filament\Forms\Components\TextInput;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\EditAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
@@ -35,14 +37,18 @@ class GameQueryResource extends Resource
                 TextColumn::make('query_port_offset')
                     ->label('Port Offset')
                     ->placeholder('No offset'),
-                TextColumn::make('eggs.name')
-                    ->label('Eggs')
-                    ->placeholder('No eggs')
-                    ->icon('tabler-eggs')
+                TextColumn::make('servers.name')
+                    ->label('Servers')
+                    ->placeholder('No servers')
+                    ->icon('tabler-server')
                     ->badge(),
             ])
             ->emptyStateIcon('tabler-device-desktop-search')
-            ->emptyStateHeading('No Game Queries');
+            ->emptyStateHeading('No Game Queries')
+            ->actions([
+                EditAction::make(),
+                DeleteAction::make(),
+            ]);
     }
 
     public static function form(Schema $schema): Schema
@@ -59,9 +65,9 @@ class GameQueryResource extends Resource
                     ->nullable()
                     ->minValue(1)
                     ->maxValue(64511),
-                Select::make('eggs')
-                    ->label('Eggs')
-                    ->relationship('eggs', 'name')
+                Select::make('servers')
+                    ->label('Servers')
+                    ->relationship('servers', 'name')
                     ->multiple()
                     ->preload()
                     ->searchable()

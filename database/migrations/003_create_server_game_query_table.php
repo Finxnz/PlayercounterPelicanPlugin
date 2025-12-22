@@ -8,18 +8,18 @@ return new class extends Migration
 {
     public function up(): void
     {
-        if (Schema::hasTable('egg_game_query')) {
+        if (Schema::hasTable('server_game_query')) {
             return;
         }
 
-        Schema::create('egg_game_query', function (Blueprint $table) {
-            $table->unsignedInteger('egg_id');
+        Schema::create('server_game_query', function (Blueprint $table) {
+            $table->char('server_id', 36);
             $table->unsignedInteger('game_query_id');
 
-            $table->unique('egg_id');
+            $table->unique('server_id');
 
-            if (Schema::hasTable('eggs')) {
-                $table->foreign('egg_id')->references('id')->on('eggs')->cascadeOnDelete();
+            if (Schema::hasTable('servers')) {
+                $table->foreign('server_id')->references('uuid')->on('servers')->cascadeOnDelete();
             }
 
             if (Schema::hasTable('game_queries')) {
@@ -30,6 +30,7 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('egg_game_query');
+        Schema::dropIfExists('server_game_query');
     }
 };
+

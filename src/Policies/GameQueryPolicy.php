@@ -8,7 +8,6 @@ class GameQueryPolicy
 {
     public function before(User $user): ?bool
     {
-        // Root admins can do everything
         return ($user->root_admin ?? false) ? true : null;
     }
 

@@ -4,11 +4,11 @@ namespace Finxnz\PlayerCounter\Models;
 
 use App\Models\Allocation;
 use App\Models\Egg;
+use App\Models\Server;
 use Exception;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
-// GameQ\GameQ removed - using native implementation
 
 /**
  * @property int $id
@@ -16,6 +16,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
  * @property ?int $query_port_offset
  * @property Collection|Egg[] $eggs
  * @property int|null $eggs_count
+ * @property Collection|Server[] $servers
+ * @property int|null $servers_count
  */
 class GameQuery extends Model
 {
@@ -37,7 +39,13 @@ class GameQuery extends Model
 
     public function eggs(): BelongsToMany
     {
-        return $this->belongsToMany(Egg::class);
+        return $this->belongsToMany(Egg::class)->using(EggGameQuery::class);
+    }
+
+    public function servers(): BelongsToMany
+    {
+        return $this->belongsToMany(Server::class, 'server_game_query', 'game_query_id', 'server_id', 'id', 'uuid')
+            ->using(ServerGameQuery::class);
     }
 
     /** @return array<string, mixed> */
@@ -51,13 +59,11 @@ class GameQuery extends Model
                 return $this->queryMinecraft($ip, $port);
             }
             
-            // Fallback für andere Query-Typen
             return ['query_error' => true];
         } catch (Exception $exception) {
             try {
                 report($exception);
             } catch (Exception $reportException) {
-                // If reporting fails, ignore it
             }
         }
 
@@ -77,7 +83,6 @@ class GameQuery extends Model
         stream_set_blocking($socket, true);
 
         try {
-            // Handshake packet
             $handshake = pack('c*', 0xFE, 0xFD, 0x09, 0x00, 0x00, 0x00, 0x00);
             fwrite($socket, $handshake);
             
@@ -87,7 +92,6 @@ class GameQuery extends Model
                 return ['query_error' => true];
             }
 
-            // Extract challenge token
             $challengeToken = substr($response, 5);
             $challengeToken = rtrim($challengeToken, "\x00");
             
@@ -96,7 +100,6 @@ class GameQuery extends Model
                 return ['query_error' => true];
             }
 
-            // Full stat request
             $token = pack('N', intval($challengeToken));
             $statRequest = pack('c*', 0xFE, 0xFD, 0x00) . pack('N', 0) . $token . pack('c*', 0x00, 0x00, 0x00, 0x00);
             fwrite($socket, $statRequest);
@@ -130,7 +133,6 @@ class GameQuery extends Model
     private function parseMinecraftQuery(string $data): array
     {
         try {
-            // Skip header (type, session id, padding)
             $data = substr($data, 16);
             
             $parts = explode("\x00\x00\x01player_\x00\x00", $data);
@@ -139,7 +141,6 @@ class GameQuery extends Model
                 return ['query_error' => true];
             }
 
-            // Parse key-value pairs
             $kvSection = $parts[0];
             $kvPairs = explode("\x00", $kvSection);
             
@@ -153,7 +154,6 @@ class GameQuery extends Model
                 }
             }
 
-            // Parse players
             $playerSection = $parts[1];
             $playerNames = array_filter(explode("\x00", $playerSection), function($name) {
                 return $name !== '';
@@ -167,7 +167,6 @@ class GameQuery extends Model
                 ];
             }
 
-            // Map to expected format
             return [
                 'gq_hostname' => $result['hostname'] ?? 'Unknown',
                 'gq_numplayers' => isset($result['numplayers']) ? (int)$result['numplayers'] : count($players),

@@ -18,7 +18,6 @@ class ServerPlayerWidget extends StatsOverviewWidget
     public static function canView(): bool
     {
         try {
-            // Check if tables exist first
             if (!Schema::hasTable('game_queries')) {
                 return false;
             }
@@ -44,11 +43,9 @@ class ServerPlayerWidget extends StatsOverviewWidget
 
             return true;
         } catch (Exception $e) {
-            // If any check fails, don't show the widget
             try {
                 report($e);
             } catch (Exception $reportException) {
-                // Ignore reporting errors
             }
             return false;
         }
@@ -83,11 +80,9 @@ class ServerPlayerWidget extends StatsOverviewWidget
                 SmallStatBlock::make(trans('player-counter::query.map'), $data['gq_mapname'] ?? trans('player-counter::query.unknown')),
             ];
         } catch (Exception $e) {
-            // If stats retrieval fails, return empty array instead of crashing
             try {
                 report($e);
             } catch (Exception $reportException) {
-                // Ignore reporting errors
             }
             return [];
         }

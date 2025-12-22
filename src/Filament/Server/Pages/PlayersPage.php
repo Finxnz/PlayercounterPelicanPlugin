@@ -42,7 +42,6 @@ class PlayersPage extends Page implements HasTable
     public static function canAccess(): bool
     {
         try {
-            // Check if tables exist first
             if (!SchemaFacade::hasTable('game_queries')) {
                 return false;
             }
@@ -55,7 +54,6 @@ class PlayersPage extends Page implements HasTable
             try {
                 report($e);
             } catch (Exception $reportException) {
-                // Ignore reporting errors
             }
             return false;
         }
@@ -104,13 +102,12 @@ class PlayersPage extends Page implements HasTable
                 if ($opsContent) {
                     $ops = json_decode($opsContent, true, 512, JSON_THROW_ON_ERROR);
                     $ops = array_unique(array_map(fn ($data) => $data['name'] ?? '', $ops));
-                    $ops = array_filter($ops); // Remove empty values
+                    $ops = array_filter($ops);
                 }
             } catch (Exception $exception) {
                 try {
                     report($exception);
                 } catch (Exception $reportException) {
-                    // Ignore reporting errors
                 }
             }
         }
@@ -130,7 +127,6 @@ class PlayersPage extends Page implements HasTable
                     if ($gameQuery) {
                         $data = $gameQuery->runQuery($server->allocation);
                         
-                        // Check if query failed
                         if (isset($data['query_error']) && $data['query_error'] === true) {
                             $queryError = true;
                         } else {
@@ -142,7 +138,6 @@ class PlayersPage extends Page implements HasTable
                         $players = [];
                     }
 
-                    // Store query error state for use in empty state
                     $this->queryError = $queryError;
 
                     if ($search) {
@@ -151,11 +146,9 @@ class PlayersPage extends Page implements HasTable
 
                     return new LengthAwarePaginator(array_slice($players, ($page - 1) * $recordsPerPage, $recordsPerPage), count($players), $recordsPerPage, $page);
                 } catch (Exception $e) {
-                    // Return empty paginator if query fails
                     try {
                         report($e);
                     } catch (Exception $reportException) {
-                        // Ignore reporting errors
                     }
                     $this->queryError = true;
                     return new LengthAwarePaginator([], 0, $recordsPerPage, $page);
@@ -211,7 +204,6 @@ class PlayersPage extends Page implements HasTable
                             try {
                                 report($exception);
                             } catch (Exception $reportException) {
-                                // Ignore reporting errors
                             }
 
                             Notification::make()
@@ -265,7 +257,6 @@ class PlayersPage extends Page implements HasTable
                             try {
                                 report($exception);
                             } catch (Exception $reportException) {
-                                // Ignore reporting errors
                             }
 
                             Notification::make()
@@ -300,7 +291,6 @@ class PlayersPage extends Page implements HasTable
                             try {
                                 report($exception);
                             } catch (Exception $reportException) {
-                                // Ignore reporting errors
                             }
 
                             Notification::make()
@@ -319,7 +309,6 @@ class PlayersPage extends Page implements HasTable
                     return trans('player-counter::query.table.server_offline');
                 }
 
-                // Check if query failed
                 if ($this->queryError) {
                     return trans('player-counter::query.table.query_failed');
                 }
@@ -334,7 +323,6 @@ class PlayersPage extends Page implements HasTable
                     return null;
                 }
 
-                // Check if query failed
                 if ($this->queryError) {
                     return trans('player-counter::query.table.query_failed_description');
                 }

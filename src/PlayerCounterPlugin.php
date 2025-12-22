@@ -3,11 +3,10 @@
 namespace Finxnz\PlayerCounter;
 
 use App\Models\Server;
-use Finxnz\PlayerCounter\Models\EggGameQuery;
 use Finxnz\PlayerCounter\Models\GameQuery;
 use Filament\Contracts\Plugin;
 use Filament\Panel;
-use Illuminate\Database\Eloquent\Relations\HasOneThrough;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Exception;
 
 class PlayerCounterPlugin implements Plugin
@@ -43,19 +42,18 @@ class PlayerCounterPlugin implements Plugin
                 $panel->discoverWidgets($widgetsPath, $widgetsNamespace);
             }
         } catch (Exception $e) {
-            // Fail silently during registration to prevent plugin upload/installation errors
             try {
                 report($e);
             } catch (Exception $reportException) {
-                // Ignore reporting errors
             }
         }
     }
 
     public function boot(Panel $panel): void {}
 
-    public static function getGameQuery(Server $server): HasOneThrough
+    public static function getGameQuery(Server $server): BelongsToMany
     {
-        return $server->egg->hasOneThrough(GameQuery::class, EggGameQuery::class, 'egg_id', 'id', 'id', 'game_query_id');
+        return $server->belongsToMany(GameQuery::class, 'server_game_query', 'server_id', 'game_query_id', 'uuid', 'id');
     }
 }
+
