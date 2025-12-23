@@ -14,8 +14,8 @@ This plugin adds a **player overview section** to your server by using the query
 ##  Quick Installation and Update
 
 1. Run the **command**.
-2. And choose your option update/install/permission fix.
-3. Use the permission fix if the skript failes due to permission errors.
+2. And choose your option update/install/fix.
+3. Use the fix option if the plugin doesnt work or you get permission errors.
 4. If you updated the plugin run the script again and choose install. :D
 
    ```bash
