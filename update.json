@@ -1,5 +1,5 @@
 {
-    "1.0.0-beta31": {
+    "*": {
         "version": "1.0.3",
         "download_url": "https://github.com/Finxnz/PlayercounterPelicanPlugin/releases/latest/download/player-counter.zip"
     }
