@@ -41,6 +41,10 @@ class PlayersPage extends Page implements HasTable
     
     public ?string $queryErrorMessage = null;
 
+    private static ?array $cachedPlayers = null;
+    private static ?float $cacheTime = null;
+    private const CACHE_DURATION = 3;
+
     public static function canAccess(): bool
     {
         try {
@@ -48,7 +52,6 @@ class PlayersPage extends Page implements HasTable
                 return false;
             }
 
-            /** @var Server $server */
             $server = Filament::getTenant();
 
             return parent::canAccess() && $server->allocation && PlayerCounterPlugin::getGameQuery($server)->exists();
@@ -81,72 +84,82 @@ class PlayersPage extends Page implements HasTable
         return static::getNavigationLabel();
     }
 
-    /**
-     * @throws Exception
-     */
-    public function table(Table $table): Table
+    private function getOpsData(): array
     {
-        /** @var Server $server */
         $server = Filament::getTenant();
-
-        /** @var ?GameQuery $gameQuery */
         $gameQuery = PlayerCounterPlugin::getGameQuery($server)->first();
-
         $isMinecraft = $gameQuery?->query_type === 'minecraft';
 
-        $ops = [];
+        if (!$isMinecraft) {
+            return [];
+        }
 
-        if ($isMinecraft) {
+        try {
             $fileRepository = (new DaemonFileRepository())->setServer($server);
-
+            $opsContent = $fileRepository->getContent('ops.json');
+            if ($opsContent) {
+                $ops = json_decode($opsContent, true, 512, JSON_THROW_ON_ERROR);
+                return array_filter(array_unique(array_map(fn ($data) => $data['name'] ?? '', $ops)));
+            }
+        } catch (Exception $exception) {
             try {
-                $opsContent = $fileRepository->getContent('ops.json');
-                if ($opsContent) {
-                    $ops = json_decode($opsContent, true, 512, JSON_THROW_ON_ERROR);
-                    $ops = array_unique(array_map(fn ($data) => $data['name'] ?? '', $ops));
-                    $ops = array_filter($ops);
-                }
-            } catch (Exception $exception) {
-                try {
-                    report($exception);
-                } catch (Exception $reportException) {
-                }
+                report($exception);
+            } catch (Exception $reportException) {
             }
         }
+
+        return [];
+    }
+
+    public function table(Table $table): Table
+    {
+        $server = Filament::getTenant();
+        $gameQuery = PlayerCounterPlugin::getGameQuery($server)->first();
+        $isMinecraft = $gameQuery?->query_type === 'minecraft';
+        $ops = $this->getOpsData();
 
         return $table
             ->records(function (?string $search, int $page, int $recordsPerPage) {
                 try {
-                    /** @var Server $server */
-                    $server = Filament::getTenant();
-
-                    $players = [];
-                    $queryError = false;
-                    $queryErrorMessage = null;
-
-                    /** @var ?GameQuery $gameQuery */
-                    $gameQuery = PlayerCounterPlugin::getGameQuery($server)->first();
-
-                    if ($gameQuery) {
-                        $data = $gameQuery->runQuery($server->allocation);
+                    $currentTime = microtime(true);
+                    
+                    if (self::$cachedPlayers === null || 
+                        self::$cacheTime === null || 
+                        ($currentTime - self::$cacheTime) > self::CACHE_DURATION) {
                         
-                        if (isset($data['query_error']) && $data['query_error'] === true) {
-                            $queryError = true;
-                            $queryErrorMessage = $data['error_message'] ?? 'Unknown error';
-                            \Log::error('[PlayerCounter] Query failed in PlayersPage', [
-                                'error_message' => $queryErrorMessage
-                            ]);
-                        } else {
-                            $players = $data['players'] ?? [];
-                        }
-                    }
-
-                    if (!is_array($players)) {
+                        $server = Filament::getTenant();
                         $players = [];
-                    }
+                        $queryError = false;
+                        $queryErrorMessage = null;
 
-                    $this->queryError = $queryError;
-                    $this->queryErrorMessage = $queryErrorMessage;
+                        $gameQuery = PlayerCounterPlugin::getGameQuery($server)->first();
+
+                        if ($gameQuery) {
+                            $data = $gameQuery->runQuery($server->allocation);
+                            
+                            if (isset($data['query_error']) && $data['query_error'] === true) {
+                                $queryError = true;
+                                $queryErrorMessage = $data['error_message'] ?? 'Unknown error';
+                                \Log::error('[PlayerCounter] Query failed in PlayersPage', [
+                                    'error_message' => $queryErrorMessage
+                                ]);
+                            } else {
+                                $players = $data['players'] ?? [];
+                            }
+                        }
+
+                        if (!is_array($players)) {
+                            $players = [];
+                        }
+
+                        $this->queryError = $queryError;
+                        $this->queryErrorMessage = $queryErrorMessage;
+
+                        self::$cachedPlayers = $players;
+                        self::$cacheTime = $currentTime;
+                    } else {
+                        $players = self::$cachedPlayers;
+                    }
 
                     if ($search) {
                         $players = array_filter($players, fn ($player) => isset($player['player']) && str($player['player'])->contains($search, true));
@@ -178,7 +191,8 @@ class PlayersPage extends Page implements HasTable
                 Split::make([
                     ImageColumn::make('avatar')
                         ->visible(fn () => $isMinecraft)
-                        ->state(fn (array $record) => 'https://cravatar.eu/helmhead/' . ($record['player'] ?? 'Steve') . '/256.png')
+                        ->state(fn (array $record) => 'https://cravatar.eu/helmhead/' . ($record['player'] ?? 'Steve') . '/64.png')
+                        ->extraImgAttributes(['loading' => 'lazy'])
                         ->grow(false),
                     TextColumn::make('player')
                         ->label('Name')
@@ -195,128 +209,24 @@ class PlayersPage extends Page implements HasTable
                         ->formatStateUsing(fn ($state) => $state ? CarbonInterval::seconds($state)->cascade()->forHumans() : null),
                 ]),
             ])
+            ->recordAction('view')
             ->recordActions([
-                Action::make('kick')
-                    ->visible(fn () => $isMinecraft)
-                    ->icon('tabler-door-exit')
-                    ->color('danger')
-                    ->action(function (array $record) {
-                        /** @var Server $server */
-                        $server = Filament::getTenant();
-
-                        try {
-                            $server->send('kick ' . $record['player']);
-
-                            Notification::make()
-                                ->title(trans('player-counter::query.notifications.player_kicked'))
-                                ->body($record['player'])
-                                ->success()
-                                ->send();
-
-                            $this->refreshPage();
-                        } catch (Exception $exception) {
-                            try {
-                                report($exception);
-                            } catch (Exception $reportException) {
-                            }
-
-                            Notification::make()
-                                ->title(trans('player-counter::query.notifications.player_kick_failed'))
-                                ->body($exception->getMessage())
-                                ->danger()
-                                ->send();
-                        }
-                    }),
-                Action::make('ban')
-                    ->visible(fn () => $isMinecraft)
-                    ->icon('tabler-ban')
-                    ->color('danger')
-                    ->form([
-                        \Filament\Forms\Components\TextInput::make('reason')
-                            ->label(trans('player-counter::query.ban_reason'))
-                            ->placeholder(trans('player-counter::query.ban_reason_placeholder'))
-                            ->default('Banned by admin')
-                            ->required(),
-                        \Filament\Forms\Components\TextInput::make('duration')
-                            ->label(trans('player-counter::query.ban_duration'))
-                            ->placeholder(trans('player-counter::query.ban_duration_placeholder'))
-                            ->helperText(trans('player-counter::query.ban_duration_help'))
-                            ->default(''),
-                    ])
-                    ->action(function (array $record, array $data) {
-                        /** @var Server $server */
-                        $server = Filament::getTenant();
-
-                        try {
-                            $command = 'ban ' . $record['player'];
-                            
-                            if (!empty($data['duration'])) {
-                                $command = 'ban ' . $record['player'] . ' ' . $data['duration'];
-                            }
-                            
-                            if (!empty($data['reason'])) {
-                                $command .= ' ' . $data['reason'];
-                            }
-
-                            $server->send($command);
-
-                            Notification::make()
-                                ->title(trans('player-counter::query.notifications.player_banned'))
-                                ->body($record['player'])
-                                ->success()
-                                ->send();
-
-                            $this->refreshPage();
-                        } catch (Exception $exception) {
-                            try {
-                                report($exception);
-                            } catch (Exception $reportException) {
-                            }
-
-                            Notification::make()
-                                ->title(trans('player-counter::query.notifications.player_ban_failed'))
-                                ->body($exception->getMessage())
-                                ->danger()
-                                ->send();
-                        }
-                    }),
-                Action::make('op')
-                    ->visible(fn () => $isMinecraft)
-                    ->label(fn (array $record) => in_array($record['player'], $ops) ? trans('player-counter::query.remove_from_ops') : trans('player-counter::query.add_to_ops'))
-                    ->icon(fn (array $record) => in_array($record['player'], $ops) ? 'tabler-shield-minus' : 'tabler-shield-plus')
-                    ->color(fn (array $record) => in_array($record['player'], $ops) ? 'warning' : 'success')
-                    ->action(function (array $record) use ($ops) {
-                        /** @var Server $server */
-                        $server = Filament::getTenant();
-
-                        try {
-                            $action = in_array($record['player'], $ops) ? 'deop' : 'op';
-
-                            $server->send($action  . ' ' . $record['player']);
-
-                            Notification::make()
-                                ->title(trans('player-counter::query.notifications.player_' . $action))
-                                ->body($record['player'])
-                                ->success()
-                                ->send();
-
-                            $this->refreshPage();
-                        } catch (Exception $exception) {
-                            try {
-                                report($exception);
-                            } catch (Exception $reportException) {
-                            }
-
-                            Notification::make()
-                                ->title(trans('player-counter::query.notifications.player_op_failed'))
-                                ->body($exception->getMessage())
-                                ->danger()
-                                ->send();
-                        }
-                    }),
+                Action::make('view')
+                    ->label('View Details')
+                    ->icon('tabler-eye')
+                    ->modalHeading(fn (array $record) => $record['player'] ?? 'Player')
+                    ->modalWidth('md')
+                    ->modalContent(fn (array $record) => view('player-counter::player-modal', [
+                        'player' => $record['player'] ?? 'Unknown',
+                        'isMinecraft' => $isMinecraft,
+                        'isOp' => in_array($record['player'] ?? '', $ops),
+                        'avatar' => 'https://cravatar.eu/helmhead/' . ($record['player'] ?? 'Steve') . '/128.png',
+                        'time' => $record['time'] ?? null,
+                    ]))
+                    ->modalActions(fn (array $record) => $this->getPlayerModalActions($record, $isMinecraft, $ops))
+                    ->modalCancelAction(false),
             ])
             ->emptyStateHeading(function () {
-                /** @var Server $server */
                 $server = Filament::getTenant();
 
                 if ($server->retrieveStatus()->isOffline()) {
@@ -330,7 +240,6 @@ class PlayersPage extends Page implements HasTable
                 return trans('player-counter::query.table.no_players');
             })
             ->emptyStateDescription(function () {
-                /** @var Server $server */
                 $server = Filament::getTenant();
 
                 if ($server->retrieveStatus()->isOffline()) {
@@ -347,6 +256,136 @@ class PlayersPage extends Page implements HasTable
 
                 return trans('player-counter::query.table.no_players_description');
             });
+    }
+
+    private function getPlayerModalActions(array $record, bool $isMinecraft, array $ops): array
+    {
+        if (!$isMinecraft) {
+            return [];
+        }
+
+        return [
+            Action::make('kick')
+                ->label('Kick')
+                ->icon('tabler-door-exit')
+                ->color('danger')
+                ->action(function () use ($record) {
+                    $server = Filament::getTenant();
+
+                    try {
+                        $server->send('kick ' . $record['player']);
+
+                        Notification::make()
+                            ->title(trans('player-counter::query.notifications.player_kicked'))
+                            ->body($record['player'])
+                            ->success()
+                            ->send();
+
+                        self::$cachedPlayers = null;
+                        self::$cacheTime = null;
+                        $this->refreshPage();
+                    } catch (Exception $exception) {
+                        try {
+                            report($exception);
+                        } catch (Exception $reportException) {
+                        }
+
+                        Notification::make()
+                            ->title(trans('player-counter::query.notifications.player_kick_failed'))
+                            ->body($exception->getMessage())
+                            ->danger()
+                            ->send();
+                    }
+                }),
+            Action::make('ban')
+                ->label('Ban')
+                ->icon('tabler-ban')
+                ->color('danger')
+                ->form([
+                    \Filament\Forms\Components\TextInput::make('reason')
+                        ->label(trans('player-counter::query.ban_reason'))
+                        ->placeholder(trans('player-counter::query.ban_reason_placeholder'))
+                        ->default('Banned by admin')
+                        ->required(),
+                    \Filament\Forms\Components\TextInput::make('duration')
+                        ->label(trans('player-counter::query.ban_duration'))
+                        ->placeholder(trans('player-counter::query.ban_duration_placeholder'))
+                        ->helperText(trans('player-counter::query.ban_duration_help'))
+                        ->default(''),
+                ])
+                ->action(function (array $data) use ($record) {
+                    $server = Filament::getTenant();
+
+                    try {
+                        $command = 'ban ' . $record['player'];
+                        
+                        if (!empty($data['duration'])) {
+                            $command = 'ban ' . $record['player'] . ' ' . $data['duration'];
+                        }
+                        
+                        if (!empty($data['reason'])) {
+                            $command .= ' ' . $data['reason'];
+                        }
+
+                        $server->send($command);
+
+                        Notification::make()
+                            ->title(trans('player-counter::query.notifications.player_banned'))
+                            ->body($record['player'])
+                            ->success()
+                            ->send();
+
+                        self::$cachedPlayers = null;
+                        self::$cacheTime = null;
+                        $this->refreshPage();
+                    } catch (Exception $exception) {
+                        try {
+                            report($exception);
+                        } catch (Exception $reportException) {
+                        }
+
+                        Notification::make()
+                            ->title(trans('player-counter::query.notifications.player_ban_failed'))
+                            ->body($exception->getMessage())
+                            ->danger()
+                            ->send();
+                    }
+                }),
+            Action::make('op')
+                ->label(fn () => in_array($record['player'], $ops) ? trans('player-counter::query.remove_from_ops') : trans('player-counter::query.add_to_ops'))
+                ->icon(fn () => in_array($record['player'], $ops) ? 'tabler-shield-minus' : 'tabler-shield-plus')
+                ->color(fn () => in_array($record['player'], $ops) ? 'warning' : 'success')
+                ->action(function () use ($record, $ops) {
+                    $server = Filament::getTenant();
+
+                    try {
+                        $action = in_array($record['player'], $ops) ? 'deop' : 'op';
+
+                        $server->send($action  . ' ' . $record['player']);
+
+                        Notification::make()
+                            ->title(trans('player-counter::query.notifications.player_' . $action))
+                            ->body($record['player'])
+                            ->success()
+                            ->send();
+
+                        self::$cachedPlayers = null;
+                        self::$cacheTime = null;
+                        $this->refreshPage();
+                    } catch (Exception $exception) {
+                        try {
+                            report($exception);
+                        } catch (Exception $reportException) {
+                        }
+
+                        Notification::make()
+                            ->title(trans('player-counter::query.notifications.player_op_failed'))
+                            ->body($exception->getMessage())
+                            ->danger()
+                            ->send();
+                    }
+                }),
+        ];
     }
 
     public function content(Schema $schema): Schema

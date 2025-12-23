@@ -10,15 +10,6 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
-/**
- * @property int $id
- * @property string $query_type
- * @property ?int $query_port_offset
- * @property Collection|Egg[] $eggs
- * @property int|null $eggs_count
- * @property Collection|Server[] $servers
- * @property int|null $servers_count
- */
 class GameQuery extends Model
 {
     protected $fillable = [
@@ -48,7 +39,6 @@ class GameQuery extends Model
             ->using(ServerGameQuery::class);
     }
 
-    /** @return array<string, mixed> */
     public function runQuery(Allocation $allocation): array
     {
         $ip = is_ipv6($allocation->ip) ? '[' . $allocation->ip . ']' : $allocation->ip;
@@ -56,32 +46,32 @@ class GameQuery extends Model
 
         try {
             if ($this->query_type === 'minecraft') {
-                \Log::info('[PlayerCounter] Trying Query Protocol', [
+                \Log::info('[PlayerCounter] Trying Server List Ping first', [
                     'ip' => $ip,
-                    'port' => $port,
-                    'type' => 'minecraft-query'
+                    'port' => $allocation->port,
+                    'type' => 'minecraft-ping'
+                ]);
+                
+                $pingResult = $this->queryMinecraftPing($ip, $allocation->port);
+                
+                if (!isset($pingResult['query_error']) || $pingResult['query_error'] === false) {
+                    \Log::info('[PlayerCounter] Server List Ping successful');
+                    return $pingResult;
+                }
+                
+                \Log::warning('[PlayerCounter] Server List Ping failed, trying Query Protocol', [
+                    'error_message' => $pingResult['error_message'] ?? 'Unknown error'
                 ]);
                 
                 $result = $this->queryMinecraft($ip, $port);
                 
                 if (isset($result['query_error']) && $result['query_error'] === true) {
-                    \Log::warning('[PlayerCounter] Query Protocol failed, trying Server List Ping', [
-                        'error_message' => $result['error_message'] ?? 'Unknown error'
+                    \Log::error('[PlayerCounter] Both Ping and Query failed', [
+                        'ping_error' => $pingResult['error_message'] ?? 'Unknown',
+                        'query_error' => $result['error_message'] ?? 'Unknown'
                     ]);
-                    
-                    $pingResult = $this->queryMinecraftPing($ip, $allocation->port);
-                    
-                    if (isset($pingResult['query_error']) && $pingResult['query_error'] === true) {
-                        \Log::error('[PlayerCounter] Both Query and Ping failed', [
-                            'query_error' => $result['error_message'] ?? 'Unknown',
-                            'ping_error' => $pingResult['error_message'] ?? 'Unknown'
-                        ]);
-                    }
-                    
-                    return $pingResult;
                 }
                 
-                \Log::info('[PlayerCounter] Query Protocol successful');
                 return $result;
             }
             
@@ -116,10 +106,9 @@ class GameQuery extends Model
         return ['query_error' => true, 'error_message' => 'Unknown error occurred'];
     }
 
-    /** @return array<string, mixed> */
     private function queryMinecraft(string $ip, int $port): array
     {
-        $socket = @fsockopen('udp://' . $ip, $port, $errno, $errstr, 3);
+        $socket = @fsockopen('udp://' . $ip, $port, $errno, $errstr, 1);
         
         if (!$socket) {
             $errorMsg = "Failed to open UDP socket: errno=$errno, errstr=$errstr";
@@ -132,7 +121,7 @@ class GameQuery extends Model
             return ['query_error' => true, 'error_message' => $errorMsg];
         }
 
-        stream_set_timeout($socket, 3);
+        stream_set_timeout($socket, 1);
         stream_set_blocking($socket, true);
 
         try {
@@ -172,7 +161,7 @@ class GameQuery extends Model
             $data = '';
             $startTime = microtime(true);
             while (!feof($socket)) {
-                if (microtime(true) - $startTime > 3) {
+                if (microtime(true) - $startTime > 1) {
                     break;
                 }
                 $chunk = fread($socket, 2048);
@@ -205,7 +194,6 @@ class GameQuery extends Model
         }
     }
 
-    /** @return array<string, mixed> */
     private function parseMinecraftQuery(string $data): array
     {
         try {
@@ -268,10 +256,9 @@ class GameQuery extends Model
         }
     }
 
-    /** @return array<string, mixed> */
     private function queryMinecraftPing(string $ip, int $port): array
     {
-        $socket = @fsockopen($ip, $port, $errno, $errstr, 3);
+        $socket = @fsockopen($ip, $port, $errno, $errstr, 2);
         
         if (!$socket) {
             $errorMsg = "Failed to open TCP socket: errno=$errno, errstr=$errstr";
@@ -284,7 +271,7 @@ class GameQuery extends Model
             return ['query_error' => true, 'error_message' => $errorMsg];
         }
 
-        stream_set_timeout($socket, 3);
+        stream_set_timeout($socket, 2);
         stream_set_blocking($socket, true);
 
         try {
@@ -332,7 +319,7 @@ class GameQuery extends Model
             $remaining = $length;
             $startTime = microtime(true);
             while ($remaining > 0 && !feof($socket)) {
-                if (microtime(true) - $startTime > 3) {
+                if (microtime(true) - $startTime > 2) {
                     fclose($socket);
                     \Log::error('[PlayerCounter] Timeout while reading response');
                     return ['query_error' => true, 'error_message' => 'Timeout while reading response'];

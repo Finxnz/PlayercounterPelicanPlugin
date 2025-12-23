@@ -22,7 +22,6 @@ class ServerPlayerWidget extends StatsOverviewWidget
                 return false;
             }
 
-            /** @var Server $server */
             $server = Filament::getTenant();
 
             if (!$server || !$server->allocation) {
@@ -37,8 +36,6 @@ class ServerPlayerWidget extends StatsOverviewWidget
                 return false;
             }
 
-            // Show widget even if server is offline or query fails
-            // so we can display error messages
             return true;
         } catch (Exception $e) {
             try {
@@ -49,17 +46,15 @@ class ServerPlayerWidget extends StatsOverviewWidget
         }
     }
 
-protected function getStats(): array
+    protected function getStats(): array
     {
         try {
-            /** @var Server $server */
             $server = Filament::getTenant();
 
             if (!$server || !$server->allocation) {
                 return [];
             }
 
-            // Check if server is offline
             if ($server->retrieveStatus()->isOffline()) {
                 return [
                     SmallStatBlock::make('Server Status', 'Offline')
@@ -68,7 +63,6 @@ protected function getStats(): array
                 ];
             }
 
-            /** @var ?GameQuery $gameQuery */
             $gameQuery = PlayerCounterPlugin::getGameQuery($server)->first();
 
             if (!$gameQuery) {
@@ -81,7 +75,6 @@ protected function getStats(): array
                 return [];
             }
 
-            // Check for query error and display it
             if (isset($data['query_error']) && $data['query_error'] === true) {
                 $errorMsg = $data['error_message'] ?? 'Unknown error';
                 \Log::error('[PlayerCounter] Widget showing error', ['error' => $errorMsg]);
