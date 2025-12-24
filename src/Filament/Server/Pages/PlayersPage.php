@@ -41,9 +41,10 @@ class PlayersPage extends Page implements HasTable
     
     public ?string $queryErrorMessage = null;
 
-    private static ?array $cachedPlayers = null;
-    private static ?float $cacheTime = null;
-    private const CACHE_DURATION = 3;
+    public function getView(): string
+    {
+        return 'player-counter::players-page';
+    }
 
     public static function canAccess(): bool
     {
@@ -121,45 +122,33 @@ class PlayersPage extends Page implements HasTable
         return $table
             ->records(function (?string $search, int $page, int $recordsPerPage) {
                 try {
-                    $currentTime = microtime(true);
-                    
-                    if (self::$cachedPlayers === null || 
-                        self::$cacheTime === null || 
-                        ($currentTime - self::$cacheTime) > self::CACHE_DURATION) {
+                    $server = Filament::getTenant();
+                    $players = [];
+                    $queryError = false;
+                    $queryErrorMessage = null;
+
+                    $gameQuery = PlayerCounterPlugin::getGameQuery($server)->first();
+
+                    if ($gameQuery) {
+                        $data = $gameQuery->runQuery($server->allocation);
                         
-                        $server = Filament::getTenant();
-                        $players = [];
-                        $queryError = false;
-                        $queryErrorMessage = null;
-
-                        $gameQuery = PlayerCounterPlugin::getGameQuery($server)->first();
-
-                        if ($gameQuery) {
-                            $data = $gameQuery->runQuery($server->allocation);
-                            
-                            if (isset($data['query_error']) && $data['query_error'] === true) {
-                                $queryError = true;
-                                $queryErrorMessage = $data['error_message'] ?? 'Unknown error';
-                                \Log::error('[PlayerCounter] Query failed in PlayersPage', [
-                                    'error_message' => $queryErrorMessage
-                                ]);
-                            } else {
-                                $players = $data['players'] ?? [];
-                            }
+                        if (isset($data['query_error']) && $data['query_error'] === true) {
+                            $queryError = true;
+                            $queryErrorMessage = $data['error_message'] ?? 'Unknown error';
+                            \Log::error('[PlayerCounter] Query failed in PlayersPage', [
+                                'error_message' => $queryErrorMessage
+                            ]);
+                        } else {
+                            $players = $data['players'] ?? [];
                         }
-
-                        if (!is_array($players)) {
-                            $players = [];
-                        }
-
-                        $this->queryError = $queryError;
-                        $this->queryErrorMessage = $queryErrorMessage;
-
-                        self::$cachedPlayers = $players;
-                        self::$cacheTime = $currentTime;
-                    } else {
-                        $players = self::$cachedPlayers;
                     }
+
+                    if (!is_array($players)) {
+                        $players = [];
+                    }
+
+                    $this->queryError = $queryError;
+                    $this->queryErrorMessage = $queryErrorMessage;
 
                     if ($search) {
                         $players = array_filter($players, fn ($player) => isset($player['player']) && str($player['player'])->contains($search, true));
@@ -281,8 +270,6 @@ class PlayersPage extends Page implements HasTable
                             ->success()
                             ->send();
 
-                        self::$cachedPlayers = null;
-                        self::$cacheTime = null;
                         $this->refreshPage();
                     } catch (Exception $exception) {
                         try {
@@ -335,8 +322,6 @@ class PlayersPage extends Page implements HasTable
                             ->success()
                             ->send();
 
-                        self::$cachedPlayers = null;
-                        self::$cacheTime = null;
                         $this->refreshPage();
                     } catch (Exception $exception) {
                         try {
@@ -369,8 +354,6 @@ class PlayersPage extends Page implements HasTable
                             ->success()
                             ->send();
 
-                        self::$cachedPlayers = null;
-                        self::$cacheTime = null;
                         $this->refreshPage();
                     } catch (Exception $exception) {
                         try {
