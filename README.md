@@ -5,7 +5,7 @@ This plugin adds a **player overview section** to your server by using the query
 ##  Requirements
 
 * A Pelican Panel with the version beta30 or newer
-* A Minecraft **Paper** / **Purpur** / **Leaf** server
+* A Minecraft **Paper** / **Purpur** / **Leaf** server or Rust server
 * Query support enabled
 * Access to the panel server via SSH
 
@@ -39,9 +39,9 @@ This plugin adds a **player overview section** to your server by using the query
 
 ---
 
-##  Configuration
+##  Configuration Minecraft
 
-### 1. Create a Query in the Admin Panel
+### Create a Query in the Admin Panel
 
 1. Go to your **Admin Panel**.
 2. Navigate to **Queries**.
@@ -50,8 +50,21 @@ This plugin adds a **player overview section** to your server by using the query
    * **Type:** `game type` currentyl supports minecraft only
    * **Offset:** `0` means leave blank
    * **Server:** Choose the server you want a player counter for (currently only supports minecraft)
+  
+##  Configuration Rust
 
-### 2. Server Settings
+### Create a Query in the Admin Panel
+
+1. Go to your **Admin Panel**.
+2. Navigate to **Queries**.
+3. Create a new query with the following settings:
+
+   * **Type:** `game type` Rust or Minecraft
+   * **Offset:** `0` means leave blank
+   * **Port:** `your query port set in the variables of the rust egg` 
+   * **Server:** Choose the server you want a player counter for
+
+### Server Settings
 
 1. Open your server in the panel.
 2. Go to **Server Properties**.
@@ -60,6 +73,14 @@ This plugin adds a **player overview section** to your server by using the query
 5. Save the changes.
 6. **Restart the server**.
 
+### Server Settings Rust
+
+1. Open your server in the panel.
+2. Go to **Server**.
+3. Click on your rust server
+4. Then Click egg and go to Query port **Enter the port you want**
+5. Save the changes.
+6. **Restart the server**.
 ---
 
 ##  Result
