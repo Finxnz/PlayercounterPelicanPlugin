@@ -2,7 +2,7 @@
     "id": "player-counter",
     "name": "Player Counter",
     "author": "Finxnz",
-    "version": "1.0.4",
+    "version": "1.0.5",
     "description": "Show the amount of connected players to the server",
     "category": "plugin",
     "url": "https://github.com/Finxnz/PlayercounterPelicanPlugin",

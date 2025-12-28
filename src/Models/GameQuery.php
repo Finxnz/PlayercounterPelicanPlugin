@@ -15,6 +15,7 @@ class GameQuery extends Model
     protected $fillable = [
         'query_type',
         'query_port_offset',
+        'query_port_absolute',
     ];
 
     protected $attributes = [
@@ -42,7 +43,13 @@ class GameQuery extends Model
     public function runQuery(Allocation $allocation): array
     {
         $ip = is_ipv6($allocation->ip) ? '[' . $allocation->ip . ']' : $allocation->ip;
-        $port = $allocation->port + ($this->query_port_offset ?? 0);
+        
+        
+        if ($this->query_port_absolute !== null) {
+            $port = $this->query_port_absolute;
+        } else {
+            $port = $allocation->port + ($this->query_port_offset ?? 0);
+        }
 
         try {
             if ($this->query_type === 'minecraft') {
@@ -73,6 +80,16 @@ class GameQuery extends Model
                 }
                 
                 return $result;
+            }
+            
+            if ($this->query_type === 'rust') {
+                \Log::info('[PlayerCounter] Trying Rust Source Query', [
+                    'ip' => $ip,
+                    'port' => $port,
+                    'type' => 'rust'
+                ]);
+                
+                return $this->queryRust($ip, $port);
             }
             
             if ($this->query_type === 'minecraft-ping') {
@@ -492,5 +509,201 @@ class GameQuery extends Model
 
         $text = strip_tags($text);
         return trim($text);
+    }
+
+    private function queryRust(string $ip, int $port): array
+    {
+        $socket = @fsockopen('udp://' . $ip, $port, $errno, $errstr, 1);
+        
+        if (!$socket) {
+            $errorMsg = "Failed to open UDP socket: errno=$errno, errstr=$errstr";
+            \Log::error('[PlayerCounter] Rust Query socket error', [
+                'ip' => $ip,
+                'port' => $port,
+                'errno' => $errno,
+                'errstr' => $errstr
+            ]);
+            return ['query_error' => true, 'error_message' => $errorMsg];
+        }
+
+        stream_set_timeout($socket, 2);
+        stream_set_blocking($socket, true);
+
+        try {
+            
+            $request = pack('l', -1) . pack('c', 0x54) . "Source Engine Query\x00" . pack('l', -1);
+            $written = fwrite($socket, $request);
+            
+            if ($written === false) {
+                fclose($socket);
+                \Log::error('[PlayerCounter] Failed to write Rust A2S_INFO packet');
+                return ['query_error' => true, 'error_message' => 'Failed to write A2S_INFO request'];
+            }
+            
+            
+            $response = fread($socket, 4096);
+            if (!$response || strlen($response) < 5) {
+                fclose($socket);
+                $errorMsg = 'No A2S_INFO response or response too short (length: ' . strlen($response ?: '') . ')';
+                \Log::error('[PlayerCounter] Rust A2S_INFO failed', ['error' => $errorMsg]);
+                return ['query_error' => true, 'error_message' => $errorMsg];
+            }
+
+            
+            $pos = 0;
+            $header = unpack('l', substr($response, $pos, 4))[1];
+            $pos += 4;
+            
+            if ($header != -1) {
+                fclose($socket);
+                return ['query_error' => true, 'error_message' => 'Invalid A2S_INFO header'];
+            }
+            
+            $type = ord($response[$pos++]);
+            
+            \Log::info('[PlayerCounter] Rust A2S_INFO response type', [
+                'type' => '0x' . dechex($type),
+                'expected' => '0x49 (I) or 0x41 (A)',
+            ]);
+            
+            
+            if ($type == 0x41) { 
+                \Log::info('[PlayerCounter] Received challenge, sending new request');
+                
+                $challenge = unpack('l', substr($response, $pos, 4))[1];
+                
+                
+                $request = pack('l', -1) . pack('c', 0x54) . "Source Engine Query\x00" . pack('l', $challenge);
+                fwrite($socket, $request);
+                
+                
+                $response = fread($socket, 4096);
+                if (!$response || strlen($response) < 5) {
+                    fclose($socket);
+                    return ['query_error' => true, 'error_message' => 'No response after challenge'];
+                }
+                
+                $pos = 0;
+                $header = unpack('l', substr($response, $pos, 4))[1];
+                $pos += 4;
+                
+                if ($header != -1) {
+                    fclose($socket);
+                    return ['query_error' => true, 'error_message' => 'Invalid header after challenge'];
+                }
+                
+                $type = ord($response[$pos++]);
+            }
+            
+            if ($type != 0x49) { 
+                fclose($socket);
+                $errorMsg = 'Invalid A2S_INFO response type: 0x' . dechex($type) . ' (expected 0x49)';
+                \Log::error('[PlayerCounter] ' . $errorMsg);
+                return ['query_error' => true, 'error_message' => $errorMsg];
+            }
+
+            
+            $protocol = ord($response[$pos++]);
+            $serverName = $this->readNullTerminatedString($response, $pos);
+            $mapName = $this->readNullTerminatedString($response, $pos);
+            $folder = $this->readNullTerminatedString($response, $pos);
+            $game = $this->readNullTerminatedString($response, $pos);
+            
+            $pos += 2; 
+            $players = ord($response[$pos++]);
+            $maxPlayers = ord($response[$pos++]);
+
+            \Log::info('[PlayerCounter] Rust A2S_INFO successful', [
+                'server' => $serverName,
+                'players' => $players,
+                'max' => $maxPlayers,
+                'map' => $mapName
+            ]);
+
+            
+            $playersList = [];
+            try {
+                $challengeRequest = pack('l', -1) . pack('c', 0x55) . pack('l', -1);
+                fwrite($socket, $challengeRequest);
+                
+                $challengeResponse = fread($socket, 4096);
+                
+                if ($challengeResponse && strlen($challengeResponse) >= 9) {
+                    $pos = 4;
+                    $type = ord($challengeResponse[$pos++]);
+                    
+                    if ($type == 0x41) { 
+                        $challenge = unpack('l', substr($challengeResponse, $pos, 4))[1];
+                        
+                        
+                        $playerRequest = pack('l', -1) . pack('c', 0x55) . pack('l', $challenge);
+                        fwrite($socket, $playerRequest);
+                        
+                        $playerResponse = fread($socket, 8192);
+                        
+                        if ($playerResponse && strlen($playerResponse) > 5) {
+                            $pos = 4;
+                            $type = ord($playerResponse[$pos++]);
+                            
+                            if ($type == 0x44) { 
+                                $playerCount = ord($playerResponse[$pos++]);
+                                
+                                for ($i = 0; $i < $playerCount && $pos < strlen($playerResponse); $i++) {
+                                    $pos++; 
+                                    $name = $this->readNullTerminatedString($playerResponse, $pos);
+                                    
+                                    if ($pos + 8 <= strlen($playerResponse)) {
+                                        $score = unpack('l', substr($playerResponse, $pos, 4))[1];
+                                        $pos += 4;
+                                        $duration = unpack('f', substr($playerResponse, $pos, 4))[1];
+                                        $pos += 4;
+                                        
+                                        $playersList[] = [
+                                            'player' => $name,
+                                            'time' => (int)$duration,
+                                        ];
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (Exception $e) {
+                \Log::warning('[PlayerCounter] Failed to get player list', ['error' => $e->getMessage()]);
+            }
+
+            fclose($socket);
+
+            \Log::info('[PlayerCounter] Rust Query complete', [
+                'players_found' => count($playersList)
+            ]);
+
+            return [
+                'gq_hostname' => $serverName ?: 'Unknown',
+                'gq_numplayers' => $players,
+                'gq_maxplayers' => $maxPlayers,
+                'gq_mapname' => $mapName ?: 'Unknown',
+                'players' => $playersList,
+            ];
+        } catch (Exception $e) {
+            @fclose($socket);
+            \Log::error('[PlayerCounter] Rust Query exception', [
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine()
+            ]);
+            return ['query_error' => true, 'error_message' => 'Rust query exception: ' . $e->getMessage()];
+        }
+    }
+
+    private function readNullTerminatedString(string $data, int &$pos): string
+    {
+        $result = '';
+        while ($pos < strlen($data) && ord($data[$pos]) !== 0) {
+            $result .= $data[$pos];
+            $pos++;
+        }
+        $pos++; 
+        return $result;
     }
 }

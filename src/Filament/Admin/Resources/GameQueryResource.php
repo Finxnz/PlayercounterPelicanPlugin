@@ -34,9 +34,14 @@ class GameQueryResource extends Resource
                 TextColumn::make('query_type')
                     ->label('Type')
                     ->badge(),
+                TextColumn::make('query_port_absolute')
+                    ->label('Query Port')
+                    ->placeholder('Uses offset')
+                    ->formatStateUsing(fn ($state) => $state ?: '-'),
                 TextColumn::make('query_port_offset')
                     ->label('Port Offset')
-                    ->placeholder('No offset'),
+                    ->placeholder('No offset')
+                    ->formatStateUsing(fn ($state) => $state ?: '-'),
                 TextColumn::make('servers.name')
                     ->label('Servers')
                     ->placeholder('No servers')
@@ -60,16 +65,29 @@ class GameQueryResource extends Resource
                     ->required()
                     ->options([
                         'minecraft' => 'Minecraft',
+                        'rust' => 'Rust',
                     ])
                     ->default('minecraft')
+                    ->reactive()
                     ->native(false),
-                TextInput::make('query_port_offset')
-                    ->label('Port Offset')
-                    ->placeholder('No offset')
+                TextInput::make('query_port_absolute')
+                    ->label('Query Port')
+                    ->placeholder('e.g. 28018')
+                    ->helperText('The absolute port number for Rust queries.')
                     ->numeric()
                     ->nullable()
                     ->minValue(1)
-                    ->maxValue(64511),
+                    ->maxValue(65535)
+                    ->visible(fn ($get) => $get('query_type') === 'rust'),
+                TextInput::make('query_port_offset')
+                    ->label('Port Offset')
+                    ->placeholder('No offset')
+                    ->helperText('Adds this offset to server port.')
+                    ->numeric()
+                    ->nullable()
+                    ->minValue(1)
+                    ->maxValue(64511)
+                    ->visible(fn ($get) => $get('query_type') === 'minecraft'),
                 Select::make('servers')
                     ->label('Servers')
                     ->relationship('servers', 'name')
@@ -86,6 +104,9 @@ class GameQueryResource extends Resource
             ->components([
                 TextEntry::make('query_type')
                     ->label('Type'),
+                TextEntry::make('query_port_absolute')
+                    ->label('Query Port')
+                    ->placeholder('Uses offset'),
                 TextEntry::make('query_port_offset')
                     ->label('Port Offset')
                     ->placeholder('No offset'),

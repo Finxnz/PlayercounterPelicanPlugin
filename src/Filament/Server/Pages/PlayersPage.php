@@ -205,13 +205,19 @@ class PlayersPage extends Page implements HasTable
                     ->icon('tabler-eye')
                     ->modalHeading(fn (array $record) => $record['player'] ?? 'Player')
                     ->modalWidth('md')
-                    ->modalContent(fn (array $record) => view('player-counter::player-modal', [
-                        'player' => $record['player'] ?? 'Unknown',
-                        'isMinecraft' => $isMinecraft,
-                        'isOp' => in_array($record['player'] ?? '', $ops),
-                        'avatar' => 'https://cravatar.eu/helmhead/' . ($record['player'] ?? 'Steve') . '/128.png',
-                        'time' => $record['time'] ?? null,
-                    ]))
+                    ->modalContent(function (array $record) use ($isMinecraft, $ops) {
+                        $server = Filament::getTenant();
+                        $gameQuery = PlayerCounterPlugin::getGameQuery($server)->first();
+                        $isRust = $gameQuery?->query_type === 'rust';
+                        
+                        return view('player-counter::player-modal', [
+                            'player' => $record['player'] ?? 'Unknown',
+                            'isMinecraft' => $isMinecraft,
+                            'isOp' => in_array($record['player'] ?? '', $ops),
+                            'avatar' => 'https://cravatar.eu/helmhead/' . ($record['player'] ?? 'Steve') . '/128.png',
+                            'time' => $record['time'] ?? null,
+                        ]);
+                    })
                     ->modalActions(fn (array $record) => $this->getPlayerModalActions($record, $isMinecraft, $ops))
                     ->modalCancelAction(false),
             ])
@@ -249,10 +255,23 @@ class PlayersPage extends Page implements HasTable
 
     private function getPlayerModalActions(array $record, bool $isMinecraft, array $ops): array
     {
-        if (!$isMinecraft) {
-            return [];
+        $server = Filament::getTenant();
+        $gameQuery = PlayerCounterPlugin::getGameQuery($server)->first();
+        $isRust = $gameQuery?->query_type === 'rust';
+
+        if ($isMinecraft) {
+            return $this->getMinecraftActions($record, $ops);
         }
 
+        if ($isRust) {
+            return $this->getRustActions($record);
+        }
+
+        return [];
+    }
+
+    private function getMinecraftActions(array $record, array $ops): array
+    {
         return [
             Action::make('kick')
                 ->label('Kick')
@@ -363,6 +382,125 @@ class PlayersPage extends Page implements HasTable
 
                         Notification::make()
                             ->title(trans('player-counter::query.notifications.player_op_failed'))
+                            ->body($exception->getMessage())
+                            ->danger()
+                            ->send();
+                    }
+                }),
+        ];
+    }
+
+    private function getRustActions(array $record): array
+    {
+        return [
+            Action::make('kick')
+                ->label('Kick')
+                ->icon('tabler-door-exit')
+                ->color('danger')
+                ->form([
+                    \Filament\Forms\Components\TextInput::make('reason')
+                        ->label('Reason')
+                        ->placeholder('Enter kick reason')
+                        ->default('Kicked by admin'),
+                ])
+                ->action(function (array $data) use ($record) {
+                    $server = Filament::getTenant();
+
+                    try {
+                        $reason = $data['reason'] ?? 'Kicked by admin';
+                        $server->send('kick "' . $record['player'] . '" "' . $reason . '"');
+
+                        Notification::make()
+                            ->title('Player Kicked')
+                            ->body($record['player'])
+                            ->success()
+                            ->send();
+
+                        $this->refreshPage();
+                    } catch (Exception $exception) {
+                        try {
+                            report($exception);
+                        } catch (Exception $reportException) {
+                        }
+
+                        Notification::make()
+                            ->title('Kick Failed')
+                            ->body($exception->getMessage())
+                            ->danger()
+                            ->send();
+                    }
+                }),
+            Action::make('ban')
+                ->label('Ban')
+                ->icon('tabler-ban')
+                ->color('danger')
+                ->form([
+                    \Filament\Forms\Components\TextInput::make('reason')
+                        ->label('Reason')
+                        ->placeholder('Enter ban reason')
+                        ->default('Banned by admin')
+                        ->required(),
+                ])
+                ->action(function (array $data) use ($record) {
+                    $server = Filament::getTenant();
+
+                    try {
+                        $reason = $data['reason'] ?? 'Banned by admin';
+                        $server->send('ban "' . $record['player'] . '" "' . $reason . '"');
+
+                        Notification::make()
+                            ->title('Player Banned')
+                            ->body($record['player'])
+                            ->success()
+                            ->send();
+
+                        $this->refreshPage();
+                    } catch (Exception $exception) {
+                        try {
+                            report($exception);
+                        } catch (Exception $reportException) {
+                        }
+
+                        Notification::make()
+                            ->title('Ban Failed')
+                            ->body($exception->getMessage())
+                            ->danger()
+                            ->send();
+                    }
+                }),
+            Action::make('admin')
+                ->label('Add to Admins')
+                ->icon('tabler-shield-plus')
+                ->color('success')
+                ->form([
+                    \Filament\Forms\Components\TextInput::make('steamid')
+                        ->label('SteamID64')
+                        ->placeholder('Enter player SteamID64')
+                        ->helperText('Find SteamID64 at steamid.io')
+                        ->required(),
+                ])
+                ->action(function (array $data) use ($record) {
+                    $server = Filament::getTenant();
+
+                    try {
+                        $steamid = $data['steamid'];
+                        $server->send('moderatorid ' . $steamid . ' "' . $record['player'] . '"');
+
+                        Notification::make()
+                            ->title('Player Added to Admins')
+                            ->body($record['player'])
+                            ->success()
+                            ->send();
+
+                        $this->refreshPage();
+                    } catch (Exception $exception) {
+                        try {
+                            report($exception);
+                        } catch (Exception $reportException) {
+                        }
+
+                        Notification::make()
+                            ->title('Admin Add Failed')
                             ->body($exception->getMessage())
                             ->danger()
                             ->send();
